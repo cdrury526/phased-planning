@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Phased initiative plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "id", "title", "status", "updatedAt", "activePhase", "phases"],
+  "properties": {
+    "$schema": { "const": "../plan.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$" },
+    "title": { "$ref": "#/$defs/nonBlank" },
+    "status": { "enum": ["draft", "active", "blocked", "complete", "shelved"] },
+    "updatedAt": { "type": "string", "format": "date" },
+    "activePhase": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/phaseId" }]
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "document", "status", "dependsOn", "evidence"],
+        "properties": {
+          "id": { "$ref": "#/$defs/phaseId" },
+          "title": { "$ref": "#/$defs/nonBlank" },
+          "document": { "type": "string", "pattern": "^PHASE-[0-9]{2}(?:[a-z]+)?-[a-z][a-z0-9]*(?:-[a-z0-9]+)*\\.md$" },
+          "status": { "enum": ["pending", "active", "blocked", "complete"] },
+          "dependsOn": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/phaseId" }
+          },
+          "evidence": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/nonBlank" }
+          }
+        },
+        "allOf": [{
+          "if": { "properties": { "status": { "const": "complete" } } },
+          "then": { "properties": { "evidence": { "minItems": 1 } } }
+        }]
+      }
+    }
+  },
+  "$defs": {
+    "phaseId": {
+      "type": "string",
+      "pattern": "^[0-9]{2}(?:[a-z]+)?$",
+      "description": "Base phase NN (00–99) or insertion NNx (e.g. 06b, 06c) after the base phase."
+    },
+    "nonBlank": { "type": "string", "minLength": 1, "pattern": "\\S" }
+  }
+}

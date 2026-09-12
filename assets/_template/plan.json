@@ -1,0 +1,19 @@
+{
+  "$schema": "../plan.schema.json",
+  "schemaVersion": 1,
+  "id": "example-initiative",
+  "title": "Replace with the initiative title",
+  "status": "draft",
+  "updatedAt": "2026-09-08",
+  "activePhase": null,
+  "phases": [
+    {
+      "id": "00",
+      "title": "Replace with the first phase title",
+      "document": "PHASE-00-foundation.md",
+      "status": "pending",
+      "dependsOn": [],
+      "evidence": []
+    }
+  ]
+}
