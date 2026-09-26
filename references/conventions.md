@@ -38,7 +38,11 @@ Version 1 plans retain sequential execution and singular `activePhase`. Do not
 silently migrate existing plans or replace project schemas. To adopt version 2,
 review the project schema, set `schemaVersion: 2`, replace `activePhase` with
 `activePhases` (an array, empty when nothing is running), and review dependencies.
-A version 1 schema rejects new scaffolds until deliberately upgraded.
+Scaffolding defaults to version 1 and remains compatible with v1-only project
+schemas. Version 2 requires `--schema-version 2`; `--independent` and `--outline`
+require that explicit opt-in. A v1-only schema rejects v2 requests until its
+version 2 support is deliberately reviewed and merged, preserving project
+constraints and validating existing plans. The scaffold never replaces it.
 
 ## Baseline work and outlines
 

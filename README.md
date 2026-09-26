@@ -13,8 +13,11 @@ ln -sfn ~/projects/phased-planning ~/.claude/skills/phased-planning
 ln -sfn ~/projects/phased-planning ~/.cursor/skills/phased-planning
 ```
 
-New scaffolds use version 2. The checker also preserves version 1 lifecycle rules;
-upgrade existing project schemas deliberately before adopting new fields.
+New scaffolds default to version 1: sequential phases and one active phase.
+Version 2 is an explicit opt-in with `--schema-version 2`; `--independent` and
+`--outline` require it. Review and merge version 2 support into existing project
+schemas deliberately and validate existing plans before adopting new fields.
+The scaffold never replaces a project schema.
 
 ## Validate
 

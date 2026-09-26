@@ -24,7 +24,7 @@ class Plans(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name) / 'example'
-        SCAFFOLD.populate(self.directory, 'example', 'Example', ['build', 'design', 'delivery'], True)
+        SCAFFOLD.populate(self.directory, 'example', 'Example', ['build', 'design', 'delivery'], True, schema_version=2)
         self.data = json.loads((self.directory / 'plan.json').read_text())
         self.validator = Draft202012Validator(json.loads((ROOT / 'assets/plan.schema.json').read_text()), format_checker=FormatChecker())
 
@@ -120,14 +120,73 @@ class Plans(unittest.TestCase):
         schema_file=plans/'plan.schema.json'
         original=json.dumps(schema)
         schema_file.write_text(original)
-        cmd=[sys.executable,str(ROOT/'scripts/scaffold-plan.py'),'new-plan','--root',self.temp.name]
+        cmd=[sys.executable,str(ROOT/'scripts/scaffold-plan.py'),'new-plan','--root',self.temp.name,'--schema-version','2']
         result=subprocess.run(cmd,capture_output=True,text=True)
         self.assertNotEqual(result.returncode,0)
         self.assertFalse((plans/'new-plan').exists())
         self.assertEqual(schema_file.read_text(),original)
 
+    def scaffold_cli(self, *options):
+        return subprocess.run(
+            [sys.executable, str(ROOT/'scripts/scaffold-plan.py'), 'new-plan',
+             '--root', self.temp.name, *options], capture_output=True, text=True)
+
+    def test_default_fresh_repo_is_v1(self):
+        result=self.scaffold_cli('--phase', 'build', '--phase', 'delivery')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data=json.loads((Path(self.temp.name)/'PLANS/new-plan/plan.json').read_text())
+        self.assertEqual(data['schemaVersion'], 1)
+        self.assertIsNone(data['activePhase'])
+        self.assertNotIn('activePhases', data)
+        self.assertNotIn('baseline', data)
+        self.assertNotIn('type', data['phases'][0])
+        self.assertEqual(data['phases'][1]['dependsOn'], ['00'])
+
+    def install_real_v1_schema(self):
+        plans=Path(self.temp.name)/'PLANS'
+        plans.mkdir()
+        original=(ROOT/'tests/fixtures/v1-plan.schema.json').read_bytes()
+        (plans/'plan.schema.json').write_bytes(original)
+        return plans, original
+
+    def test_default_real_v1_schema_succeeds(self):
+        plans, original=self.install_real_v1_schema()
+        result=self.scaffold_cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data=json.loads((plans/'new-plan/plan.json').read_text())
+        self.assertEqual(data['schemaVersion'], 1)
+        self.assertIsNone(data['activePhase'])
+        self.assertEqual((plans/'plan.schema.json').read_bytes(), original)
+
+    def test_explicit_v2_fresh_repo(self):
+        result=self.scaffold_cli('--schema-version', '2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data=json.loads((Path(self.temp.name)/'PLANS/new-plan/plan.json').read_text())
+        self.assertEqual(data['schemaVersion'], 2)
+        self.assertEqual(data['activePhases'], [])
+        self.assertNotIn('activePhase', data)
+
+    def test_explicit_v2_real_v1_schema_fails_without_writes(self):
+        plans, original=self.install_real_v1_schema()
+        result=self.scaffold_cli('--schema-version', '2')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('rejected the version 2 plan', result.stderr)
+        self.assertIn('review and merge version 2 support', result.stderr)
+        self.assertIn('validate existing plans', result.stderr)
+        self.assertEqual(list(plans.iterdir()), [plans/'plan.schema.json'])
+        self.assertEqual((plans/'plan.schema.json').read_bytes(), original)
+
+    def test_v2_flags_require_explicit_opt_in(self):
+        for options in [('--independent',), ('--outline', 'foundation'),
+                        ('--schema-version', '1', '--independent')]:
+            with self.subTest(options=options):
+                result=self.scaffold_cli(*options)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn('require explicit --schema-version 2', result.stderr)
+                self.assertFalse((Path(self.temp.name)/'PLANS').exists())
+
     def test_cli_scaffold_and_refuse_overwrite(self):
-        cmd=[sys.executable,str(ROOT/'scripts/scaffold-plan.py'),'cli-plan','--root',self.temp.name,'--phase','build','--phase','design','--independent','--outline','design']
+        cmd=[sys.executable,str(ROOT/'scripts/scaffold-plan.py'),'cli-plan','--root',self.temp.name,'--phase','build','--phase','design','--schema-version','2','--independent','--outline','design']
         result=subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(result.returncode,0,result.stderr)
         d=json.loads((Path(self.temp.name)/'PLANS/cli-plan/plan.json').read_text())

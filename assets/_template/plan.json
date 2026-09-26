@@ -1,6 +1,6 @@
 {
   "$schema": "../plan.schema.json",
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "id": "example-initiative",
   "title": "Replace with the initiative title",
   "status": "draft",
@@ -15,6 +15,5 @@
       "evidence": []
     }
   ],
-  "activePhases": [],
-  "baseline": []
+  "activePhase": null
 }

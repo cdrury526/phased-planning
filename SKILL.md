@@ -44,9 +44,10 @@ Read [conventions](references/conventions.md) for layout and lifecycle rules.
    exclusions, actionable steps, concrete checks with expected results, and
    observable exit criteria. Avoid speculative later features. Reference
    architectural decisions rather than creating a competing source of truth.
-5. Record already delivered work with actual evidence in version 2 `baseline`;
-   use pending `outline` phases for later work and promote them to full documents
-   before starting.
+5. Default to version 1 with one active phase. Only use version 2 when explicitly
+   requested. With that opt-in, record already delivered work in `baseline` and
+   use pending `outline` phases for later work; promote outlines before starting.
+   In version 1, record pre-plan work and evidence in the handoff.
 6. Leave newly authored plans `draft` with pending phases unless implementation
    is also authorized and actually starting. Document unresolved questions in
    the handoff without inventing answers or completion evidence.
@@ -70,10 +71,18 @@ python3 "$SKILL_DIR/scripts/scaffold-plan.py" my-initiative \
 ```
 
 `--root` defaults to the current directory. Omit `--phase` to create one
-`foundation` phase; repeat it for ordered phases, each depending on its predecessor by default. Use `--independent` for no initial
-dependencies and edit `dependsOn` for mixed tracks. Use `--outline delivery` to
-create a lightweight pending outline for that named phase. New scaffolds use
-version 2; existing project schemas are never upgraded automatically.
+`foundation` phase; repeat it for ordered phases, each depending on its predecessor.
+The default is version 1 with singular `activePhase` and sequential execution.
+Version 2 requires explicit `--schema-version 2`. Both `--independent` (no initial
+dependencies) and `--outline delivery` (a lightweight pending outline) require
+that opt-in; using them without it is an error. Edit `dependsOn` for mixed tracks
+in version 2. Existing project schemas are never upgraded automatically.
+
+If a project schema rejects version 2, review and merge the bundled schema's
+version 2 support into the project's schema deliberately, preserving local
+constraints, then validate existing plans before retrying. Do not replace a
+project schema merely to make scaffolding pass.
+
 The script uses Python and the validator dependency described below. It creates
 only `PLANS/<initiative>/` and the schema when missing. It does not install hooks,
 project scripts, or global settings. An existing destination is an error, even
