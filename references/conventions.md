@@ -14,12 +14,12 @@ PLANS/
 ```
 
 `README.md` states the outcome and links to phase documents in manifest order.
-`plan.json` owns lifecycle status, ordered phase IDs, dependencies, current phase,
+`plan.json` owns lifecycle status, ordered phase IDs, dependencies, running phases, baseline evidence,
 update date, and evidence references. `PLAN-STATUS.md` owns narrative handoff:
 delivered behavior, verification results, blockers, unresolved decisions, next
 action, and shelving reason. Do not maintain duplicate Markdown status tables.
 
-Every phase has nonempty sections using the template's exact headings:
+Full phases (`type: "full"`, the default when omitted) have nonempty sections using the template's exact headings:
 Objective, Scope, Out of scope, Prerequisites, Implementation steps,
 Verification, Exit criteria, Completion evidence. Optional sections may be added.
 Validation checks structure, not the quality of their contents.
@@ -28,10 +28,39 @@ Validation checks structure, not the quality of their contents.
 
 Phase IDs start at `00` and increase sequentially, up to `99`. Filenames use
 `PHASE-NN-lowercase-topic.md`. Dependencies may refer only to earlier phases.
-All earlier phases must be complete before a phase starts, including when
-`dependsOn` is empty. This default is sequential; it is not a parallel work graph.
-If a project needs parallel phases, follow its existing rules or explicitly
-adapt the format and validator within the requested scope.
+In version 2, only the phases explicitly listed in `dependsOn` must be
+complete before starting a phase. Independent tracks may run together. Numeric
+order is the reading order, not an implicit dependency; requiring dependencies
+to point backward keeps the graph acyclic. Shared-file conflicts and permission
+to delegate remain the implementing agent's responsibility.
+
+Version 1 plans retain sequential execution and singular `activePhase`. Do not
+silently migrate existing plans or replace project schemas. To adopt version 2,
+review the project schema, set `schemaVersion: 2`, replace `activePhase` with
+`activePhases` (an array, empty when nothing is running), and review dependencies.
+A version 1 schema rejects new scaffolds until deliberately upgraded.
+
+## Baseline work and outlines
+
+Version 2 optionally records work completed before planning in `baseline`:
+
+```json
+"baseline": [
+  {"title": "Walking skeleton", "evidence": ["Commit abc123: boot and health check verified"]}
+]
+```
+
+Use real artifact references or command/results, and summarize the delivered
+behavior in the handoff. Baseline entries have no lifecycle and do not count as
+planned phases; draft phases remain pending. Baseline evidence never bypasses
+phase exit criteria or dependencies. If baseline work satisfies a prerequisite,
+name that outcome in the phase's Prerequisites rather than inventing a phase ID.
+
+An outline phase has `type: "outline"` and only three required sections:
+Objective, Scope, Exit criteria. Include exclusions in Scope while outlining.
+Outlines must stay pending with empty evidence. Before authorizing execution,
+promote to `type: "full"`, add all eight sections, and review actionable steps,
+prerequisites, exclusions, and verification. Do not mark an outline complete.
 
 ### Insertion phases (plan deviations)
 
@@ -56,13 +85,18 @@ Rules:
 
 ## Status transitions
 
-| Initiative | Phase state | activePhase |
+For version 2, `activePhases` lists exactly all active and blocked phase IDs.
+
+| Initiative | Phase state | activePhases |
 | --- | --- | --- |
-| `draft` | All `pending` | `null` |
-| `active` | Exactly one `active`; earlier phases complete | Current phase ID |
-| `blocked` | Exactly one `blocked`; earlier phases complete | Blocked phase ID |
-| `complete` | All `complete` | `null` |
-| `shelved` | No active or blocked phase; preserve completed phases | `null` |
+| `draft` | All `pending`; baseline allowed | `[]` |
+| `active` | At least one `active`; others may be blocked | All running IDs |
+| `blocked` | At least one `blocked`, none active | All blocked IDs |
+| `complete` | All `complete` | `[]` |
+| `shelved` | No active or blocked phase; preserve completed phases | `[]` |
+
+Every running or completed phase requires its declared dependencies complete.
+Version 1 retains exactly one running phase and requires all earlier phases complete.
 
 Completed phases need a nonempty manifest `evidence` array and actual supporting
 results in their document. References can be a commit, artifact path, or a concise
@@ -73,8 +107,8 @@ When shelving, return any unfinished active/blocked phase to `pending` and recor
 partial progress, the reason, and resumption conditions in the handoff. Shelved
 initiatives are historical, not automatic work queues. Resume when requested.
 
-When completing a phase, activate the next phase if its work is authorized, or
-leave the initiative shelved with the handoff explaining the pause. An active
+When completing a phase, activate a ready phase if its work is authorized; preserve any other
+running phases. If no work is authorized or running, leave the initiative shelved with the handoff explaining the pause. An active
 phase identifies the next authorized work; it does not claim implementation is
 already complete. Mark the whole initiative complete only when all phases finish.
 

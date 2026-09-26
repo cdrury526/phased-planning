@@ -17,6 +17,7 @@ PHASE_HEADINGS = (
     "Objective", "Scope", "Out of scope", "Prerequisites",
     "Implementation steps", "Verification", "Exit criteria", "Completion evidence",
 )
+OUTLINE_HEADINGS = ("Objective", "Scope", "Exit criteria")
 HANDOFF_HEADINGS = (
     "What is built", "Verification evidence", "Blockers and decisions",
     "Next session", "Shelving reason",
@@ -76,6 +77,7 @@ def validate(directory, validator):
     check_document(directory, "PLAN-STATUS.md", HANDOFF_HEADINGS, errors)
     phases = data["phases"]
     validate_phase_order(phases, errors)
+    version = data["schemaVersion"]
     previous = {}
     running = []
     documents = set()
@@ -89,16 +91,22 @@ def validate(directory, validator):
         if document in documents:
             errors.append(f"phase {phase_id}: duplicate document")
         documents.add(document)
-        check_document(directory, document, PHASE_HEADINGS, errors)
+        check_document(directory, document,
+                       OUTLINE_HEADINGS if phase.get("type") == "outline" else PHASE_HEADINGS, errors)
+        if version == 1 and phase.get("type") == "outline":
+            errors.append(f"phase {phase_id}: outlines require schemaVersion 2")
         for dependency in phase["dependsOn"]:
             if dependency not in previous:
                 errors.append(f"phase {phase_id}: dependency {dependency} must be an earlier phase")
             elif phase_sort_key(dependency) >= phase_sort_key(phase_id):
                 errors.append(f"phase {phase_id}: dependency {dependency} must sort before this phase")
+        prerequisites = previous if version == 1 else {
+            dependency: previous.get(dependency) for dependency in phase["dependsOn"]
+        }
         if phase["status"] != "pending" and any(
-            status != "complete" for status in previous.values()
+            state != "complete" for state in prerequisites.values()
         ):
-            errors.append(f"phase {phase_id}: all earlier phases must be complete before starting")
+            errors.append(f"phase {phase_id}: required dependencies must be complete before starting")
         if phase["status"] in ("active", "blocked"):
             running.append(phase)
         previous[phase_id] = phase["status"]
@@ -114,13 +122,24 @@ def validate(directory, validator):
             errors.append("README.md: link each phase once, in manifest order")
 
     status = data["status"]
-    if status in ("active", "blocked"):
-        if len(running) != 1 or running[0]["id"] != data["activePhase"]:
-            errors.append("active/blocked initiative must point to exactly one active/blocked phase")
-        elif running[0]["status"] != status:
-            errors.append("initiative status must match its current phase status")
-    elif running or data["activePhase"] is not None:
-        errors.append("draft/complete/shelved initiatives require activePhase null and no running phase")
+    if version == 1:
+        if status in ("active", "blocked"):
+            if len(running) != 1 or running[0]["id"] != data["activePhase"]:
+                errors.append("active/blocked initiative must point to exactly one active/blocked phase")
+            elif running[0]["status"] != status:
+                errors.append("initiative status must match its current phase status")
+        elif running or data["activePhase"] is not None:
+            errors.append("draft/complete/shelved initiatives require activePhase null and no running phase")
+    else:
+        running_ids = {phase["id"] for phase in running}
+        if set(data["activePhases"]) != running_ids:
+            errors.append("activePhases must list exactly the active/blocked phase IDs")
+        if status == "active" and not any(p["status"] == "active" for p in running):
+            errors.append("active initiative requires at least one active phase")
+        if status == "blocked" and (not running or any(p["status"] != "blocked" for p in running)):
+            errors.append("blocked initiative requires running phases to be blocked with none active")
+        if status in ("draft", "complete", "shelved") and running:
+            errors.append("draft/complete/shelved initiatives require no running phases")
     if status == "draft" and any(p["status"] != "pending" for p in phases):
         errors.append("draft initiatives require all phases pending")
     if status == "complete" and any(p["status"] != "complete" for p in phases):
@@ -162,7 +181,8 @@ def main():
         failed |= bool(errors)
     if failed:
         return 1
-    print(f"Validated {len(directories)} plan directory/directories (including template when selected).")
+    print(f"Structurally validated {len(directories)} plan directory/directories (including template when selected).")
+    print("Content quality, evidence truth, and exit-criterion satisfaction require human or agent review.")
     return 0
 
 

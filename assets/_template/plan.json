@@ -1,11 +1,10 @@
 {
   "$schema": "../plan.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "example-initiative",
   "title": "Replace with the initiative title",
   "status": "draft",
   "updatedAt": "2026-09-08",
-  "activePhase": null,
   "phases": [
     {
       "id": "00",
@@ -15,5 +14,7 @@
       "dependsOn": [],
       "evidence": []
     }
-  ]
+  ],
+  "activePhases": [],
+  "baseline": []
 }

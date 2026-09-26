@@ -1,6 +1,6 @@
 # Initiative handoff
 
-Authoritative lifecycle and active phase: [plan.json](plan.json).
+Authoritative lifecycle and running phases: [plan.json](plan.json).
 
 ## What is built
 

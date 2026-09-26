@@ -24,7 +24,7 @@ def title_for(value):
     return value.replace("-", " ").capitalize()
 
 
-def populate(directory, name, title, phases):
+def populate(directory, name, title, phases, independent=False, outlines=()):
     shutil.copytree(SKILL_ROOT / "assets/_template", directory)
     manifest = directory / "plan.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -33,18 +33,20 @@ def populate(directory, name, title, phases):
     phase_template = directory / "PHASE-00-foundation.md"
     phase_text = phase_template.read_text(encoding="utf-8")
     phase_template.unlink()
+    outline_text = (SKILL_ROOT / "assets/outline-phase.md").read_text(encoding="utf-8")
     links = []
     for index, phase in enumerate(phases):
         phase_id = f"{index:02d}"
         phase_title = title_for(phase)
         filename = f"PHASE-{phase_id}-{phase}.md"
         (directory / filename).write_text(
-            phase_text.replace("# Phase 00 — Foundation", f"# Phase {phase_id} — {phase_title}", 1),
+            (outline_text if phase in outlines else phase_text).replace("# Phase 00 — Foundation", f"# Phase {phase_id} — {phase_title}", 1),
             encoding="utf-8",
         )
         data["phases"].append({
             "id": phase_id, "title": phase_title, "document": filename,
-            "status": "pending", "dependsOn": [f"{index - 1:02d}"] if index else [],
+            "type": "outline" if phase in outlines else "full",
+            "status": "pending", "dependsOn": [f"{index - 1:02d}"] if index and not independent else [],
             "evidence": [],
         })
         links.append(f"{index + 1}. [{phase_id} — {phase_title}]({filename})")
@@ -83,7 +85,7 @@ def scaffold(args):
         staged_plans = staged_root / "PLANS"
         staged_plans.mkdir()
         staged = staged_plans / args.name
-        populate(staged, args.name, args.title or title_for(args.name), args.phase or ["foundation"])
+        populate(staged, args.name, args.title or title_for(args.name), args.phase or ["foundation"], args.independent, args.outline)
         schema_bytes = (schema if schema.exists() else SKILL_ROOT / "assets/plan.schema.json").read_bytes()
         (staged_plans / "plan.schema.json").write_bytes(schema_bytes)
         subprocess.run([
@@ -120,7 +122,11 @@ def main():
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="existing project root (default: cwd)")
     parser.add_argument("--title", help="initiative display title (default: derived from name)")
     parser.add_argument("--phase", action="append", type=slug, help="phase slug; repeat in execution order (default: foundation)")
+    parser.add_argument("--independent", action="store_true", help="start with no phase dependencies; edit dependsOn for mixed tracks")
+    parser.add_argument("--outline", action="append", type=slug, default=[], help="phase slug to scaffold with only objective, scope, and exit criteria")
     args = parser.parse_args()
+    if not set(args.outline).issubset(args.phase or ["foundation"]):
+        parser.error("--outline must name a configured phase")
     if args.title is not None and (not args.title.strip() or '\n' in args.title or '\r' in args.title):
         parser.error("--title must be a nonblank single line")
     if args.phase and (len(args.phase) > 100 or len(set(args.phase)) != len(args.phase)):
