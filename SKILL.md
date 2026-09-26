@@ -103,6 +103,15 @@ manifest, and handoff together. Use the repository's prescribed checks rather th
 adding a test suite by default. Update status and the next concrete action at
 session end; read-only questions need no artificial edits.
 
+## Dashboard
+
+Some projects are shown on the DevKit markdown dashboard. When a project's
+`devkit-compat.md` declares `PLANS/**/*.md` in `docs:`, each plan gets its own
+page, phase documents get a phase layout, and `plan.json` is cross-checked
+against exit criteria automatically. `plan.json` stays the only status source;
+never add Markdown status tables or extra markup for the dashboard's sake. For
+the marker, widgets and update cadence, load the `devkit-dashboard` skill.
+
 ## Validate
 
 Prefer the repository's checker when one exists. Otherwise run this skill's
