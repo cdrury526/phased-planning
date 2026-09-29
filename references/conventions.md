@@ -44,6 +44,25 @@ require that explicit opt-in. A v1-only schema rejects v2 requests until its
 version 2 support is deliberately reviewed and merged, preserving project
 constraints and validating existing plans. The scaffold never replaces it.
 
+## Slice-driven execution
+
+`plan.json` may declare `"execution": {"mode": "slices"}` (default `phase-doc`). The plan
+remains the roadmap; a slice system does the execution. Each phase that has started names
+its **epic slice** in `epicSlice` (repository-relative `.../slice.json`, `sliceType`
+`epic-slice`); its child slices are planned in the phase document's **Planned slices**
+section (which replaces Implementation steps) and scaffolded when the phase starts, with a
+discovery slice first.
+
+| Phase status | Epic slice |
+| --- | --- |
+| `pending` | none (optional; if set it must exist and be an epic) |
+| `active` / `blocked` | required; not `done` or `cancelled` |
+| `complete` | required; `done` (closed through the slice system) |
+
+Evidence for a complete phase links the epic slice and the child slices' close records.
+Slice statuses are owned by the slice system; the plan never duplicates them. The
+checker reads only the epic slice's `sliceType` and `status`.
+
 ## Baseline work and outlines
 
 Version 2 optionally records work completed before planning in `baseline`:

@@ -13,6 +13,10 @@ ln -sfn ~/projects/phased-planning ~/.claude/skills/phased-planning
 ln -sfn ~/projects/phased-planning ~/.cursor/skills/phased-planning
 ```
 
+Optional slice-driven execution (`execution.mode: slices`, `scaffold-plan.py --execution slices`):
+phases run through an epic slice plus child slices in a devops-slices-style slice system, and the
+checker ties phase status to the epic slice. See SKILL.md → Slice-driven execution.
+
 New scaffolds default to version 1: sequential phases and one active phase.
 Version 2 is an explicit opt-in with `--schema-version 2`; `--independent` and
 `--outline` require it. Review and merge version 2 support into existing project

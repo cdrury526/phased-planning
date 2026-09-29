@@ -22,6 +22,7 @@ HANDOFF_HEADINGS = (
     "What is built", "Verification evidence", "Blockers and decisions",
     "Next session", "Shelving reason",
 )
+SLICE_PHASE_HEADINGS = tuple("Planned slices" if h == "Implementation steps" else h for h in PHASE_HEADINGS)
 PHASE_ID_RE = re.compile(r"^(\d{2})([a-z]*)$")
 
 
@@ -59,8 +60,34 @@ def check_document(directory, name, headings, errors):
         errors.append(f"{name}: document is empty")
 
 
-def validate(directory, validator):
+def check_epic_slice(root, phase, errors):
+    """A slice-executed phase points at a real epic slice whose state matches the phase."""
+    phase_id, status, ref = phase["id"], phase["status"], phase.get("epicSlice")
+    if not ref:
+        if status != "pending":
+            errors.append(f"phase {phase_id}: execution mode slices requires epicSlice once the phase is {status}")
+        return
+    path = (root / ref)
+    if ".." in Path(ref).parts or path.is_symlink() or not path.is_file():
+        errors.append(f"phase {phase_id}: epicSlice {ref} must be an existing regular file under the repository")
+        return
+    try:
+        slice_data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        errors.append(f"phase {phase_id}: epicSlice {ref} is not readable JSON: {error}")
+        return
+    if slice_data.get("sliceType") != "epic-slice":
+        errors.append(f"phase {phase_id}: epicSlice {ref} must have sliceType epic-slice")
+    slice_status = slice_data.get("status")
+    if status == "complete" and slice_status != "done":
+        errors.append(f"phase {phase_id}: complete phase requires its epic slice to be done (close it with the slice system, not by hand); it is {slice_status}")
+    if status in ("active", "blocked") and slice_status in ("done", "cancelled"):
+        errors.append(f"phase {phase_id}: epic slice is {slice_status}; complete or re-plan the phase")
+
+
+def validate(directory, validator, root=None):
     errors = []
+    root = Path(root) if root else directory.parent.parent
     manifest = directory / "plan.json"
     if manifest.is_symlink():
         return ["plan.json must not be a symlink"]
@@ -76,6 +103,8 @@ def validate(directory, validator):
     check_document(directory, "README.md", ("Phase index", "Architectural references"), errors)
     check_document(directory, "PLAN-STATUS.md", HANDOFF_HEADINGS, errors)
     phases = data["phases"]
+    slice_mode = data.get("execution", {}).get("mode") == "slices"
+    phase_headings = SLICE_PHASE_HEADINGS if slice_mode else PHASE_HEADINGS
     validate_phase_order(phases, errors)
     version = data["schemaVersion"]
     previous = {}
@@ -92,7 +121,11 @@ def validate(directory, validator):
             errors.append(f"phase {phase_id}: duplicate document")
         documents.add(document)
         check_document(directory, document,
-                       OUTLINE_HEADINGS if phase.get("type") == "outline" else PHASE_HEADINGS, errors)
+                       OUTLINE_HEADINGS if phase.get("type") == "outline" else phase_headings, errors)
+        if slice_mode:
+            check_epic_slice(root, phase, errors)
+        elif phase.get("epicSlice"):
+            errors.append(f"phase {phase_id}: epicSlice requires execution.mode slices")
         if version == 1 and phase.get("type") == "outline":
             errors.append(f"phase {phase_id}: outlines require schemaVersion 2")
         for dependency in phase["dependsOn"]:
@@ -110,6 +143,10 @@ def validate(directory, validator):
         if phase["status"] in ("active", "blocked"):
             running.append(phase)
         previous[phase_id] = phase["status"]
+
+    epics = [p["epicSlice"] for p in phases if p.get("epicSlice")]
+    if len(epics) != len(set(epics)):
+        errors.append("epicSlice paths must be unique per phase")
 
     for orphan in directory.glob("PHASE-*.md"):
         if orphan.name not in documents:
@@ -173,7 +210,7 @@ def main():
             if directory.is_symlink():
                 errors = ["initiative directory must not be a symlink"]
             else:
-                errors = validate(directory, validator)
+                errors = validate(directory, validator, root)
         except (OSError, ValueError) as error:
             errors = [str(error)]
         for error in errors:

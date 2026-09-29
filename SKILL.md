@@ -73,6 +73,8 @@ python3 "$SKILL_DIR/scripts/scaffold-plan.py" my-initiative \
 `--root` defaults to the current directory. Omit `--phase` to create one
 `foundation` phase; repeat it for ordered phases, each depending on its predecessor.
 The default is version 1 with singular `activePhase` and sequential execution.
+Add `--execution slices` to run each phase through an epic slice and child slices
+(see "Slice-driven execution" below); the default is `phase-doc`.
 Version 2 requires explicit `--schema-version 2`. Both `--independent` (no initial
 dependencies) and `--outline delivery` (a lightweight pending outline) require
 that opt-in; using them without it is an error. Edit `dependsOn` for mixed tracks
@@ -102,6 +104,46 @@ check each exit criterion against actual evidence, then update the phase evidenc
 manifest, and handoff together. Use the repository's prescribed checks rather than
 adding a test suite by default. Update status and the next concrete action at
 session end; read-only questions need no artificial edits.
+
+## Slice-driven execution (optional)
+
+When the repository has a slice system (the devops-slices format: `slice.json` files
+with `sliceType` and `status`, closed by a close command), let the plan stay the
+roadmap and let slices do the work. Set `"execution": {"mode": "slices"}` in
+`plan.json` (`scaffold-plan.py --execution slices`). The division of labor:
+
+| Plan (phase docs, `plan.json`) | Slices |
+| --- | --- |
+| Order, dependencies, scope, owner decisions, exit criteria | Small executable units with files, verification and a close record |
+| Written for phases that have not started | Created when a phase starts |
+| Phase status and evidence links | Execution state (`in_progress`, `done`) |
+
+Rules the checker enforces in this mode:
+
+- A full phase document has a **Planned slices** section in place of Implementation
+  steps: the child slices in order, with a discovery slice first.
+- When a phase starts, scaffold an **epic slice** for it, list the planned slices as
+  its `plannedChildSlices`, and set the phase's `epicSlice` (repository-relative path
+  to its `slice.json`) in `plan.json`. `epicSlice` is required once the phase is
+  active, blocked or complete, must exist, and must have `sliceType` `epic-slice`.
+- A phase may be `complete` only when its epic slice is `done`. Close slices with the
+  slice system's close command, never by editing status. Put the epic and child slice
+  links in the phase's `evidence`.
+- An epic slice that is `done` or `cancelled` cannot back an active phase: complete
+  or re-plan the phase.
+
+Work order for an agent: read `plan.json` and the running phase, read its epic slice
+and the slice system's status view, execute one child slice at a time, and update the
+plan's status and handoff as slices close. Record durable decisions in the phase
+document or the repository's architecture source, not only in a slice. The handoff
+stays short: link to slice status instead of copying it. An unstarted phase has no epic
+slice; its phase document is its brief.
+
+Between phases with no authorized work, leave the initiative `shelved` with the
+reason and resumption condition in the handoff; set it `active` when the next phase
+starts. Existing projects adopt slice mode by adding `execution` and `epicSlice` to
+their project schema deliberately, then converting phase documents' Implementation
+steps to Planned slices.
 
 ## Dashboard
 

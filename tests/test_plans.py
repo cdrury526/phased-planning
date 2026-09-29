@@ -194,4 +194,95 @@ class Plans(unittest.TestCase):
         self.assertEqual(d['phases'][1]['type'],'outline')
         self.assertNotEqual(subprocess.run(cmd,capture_output=True).returncode,0)
 
+
+
+class SliceExecution(unittest.TestCase):
+    """execution.mode slices: phases run through an epic slice."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.directory = self.root / 'PLANS' / 'example'
+        self.directory.parent.mkdir()
+        SCAFFOLD.populate(self.directory, 'example', 'Example', ['build', 'ship'], execution='slices')
+        self.data = json.loads((self.directory / 'plan.json').read_text())
+        self.validator = Draft202012Validator(json.loads((ROOT / 'assets/plan.schema.json').read_text()), format_checker=FormatChecker())
+        self.epic = self.root / '.devops/slices/001-x-phase-build/slice.json'
+        self.epic.parent.mkdir(parents=True)
+        self.write_epic('epic-slice', 'in_progress')
+
+    def write_epic(self, slice_type, status):
+        self.epic.write_text(json.dumps({'sliceType': slice_type, 'status': status}))
+
+    def errors(self):
+        (self.directory / 'plan.json').write_text(json.dumps(self.data))
+        return CHECK.validate(self.directory, self.validator, self.root)
+
+    def start_first_phase(self, with_epic=True):
+        self.data.update(status='active', activePhase='00')
+        self.data['phases'][0]['status'] = 'active'
+        if with_epic:
+            self.data['phases'][0]['epicSlice'] = '.devops/slices/001-x-phase-build/slice.json'
+
+    def test_scaffold_is_valid_and_uses_planned_slices(self):
+        self.assertEqual(self.data['execution']['mode'], 'slices')
+        self.assertEqual(self.errors(), [])
+        text = (self.directory / 'PHASE-00-build.md').read_text()
+        self.assertIn('## Planned slices', text)
+        self.assertNotIn('## Implementation steps', text)
+
+    def test_slice_mode_rejects_implementation_steps_heading(self):
+        doc = self.directory / 'PHASE-00-build.md'
+        doc.write_text(doc.read_text().replace('## Planned slices', '## Implementation steps'))
+        self.assertTrue(any('Planned slices' in e for e in self.errors()))
+
+    def test_active_phase_needs_an_epic_slice(self):
+        self.start_first_phase(with_epic=False)
+        self.assertTrue(any('requires epicSlice' in e for e in self.errors()))
+        self.start_first_phase()
+        self.assertEqual(self.errors(), [])
+
+    def test_epic_slice_must_exist_and_be_an_epic(self):
+        self.start_first_phase()
+        self.write_epic('feature-slice', 'in_progress')
+        self.assertTrue(any('epic-slice' in e for e in self.errors()))
+        self.write_epic('epic-slice', 'in_progress')
+        self.data['phases'][0]['epicSlice'] = '.devops/slices/missing/slice.json'
+        self.assertTrue(any('existing regular file' in e for e in self.errors()))
+        self.data['phases'][0]['epicSlice'] = '../outside/slice.json'
+        self.assertTrue(self.errors())
+
+    def test_complete_phase_needs_a_done_epic(self):
+        self.start_first_phase()
+        self.data['phases'][0].update(status='complete', evidence=['Epic slice closed; child slices linked'])
+        self.data.update(status='shelved', activePhase=None)
+        self.assertTrue(any('to be done' in e for e in self.errors()))
+        self.write_epic('epic-slice', 'done')
+        self.assertEqual(self.errors(), [])
+
+    def test_closed_epic_cannot_back_a_running_phase(self):
+        self.start_first_phase()
+        self.write_epic('epic-slice', 'done')
+        self.assertTrue(any('complete or re-plan' in e for e in self.errors()))
+
+    def test_epic_slice_paths_are_unique_and_mode_gated(self):
+        self.start_first_phase()
+        self.data['phases'][1]['epicSlice'] = self.data['phases'][0]['epicSlice']
+        self.assertTrue(any('unique' in e for e in self.errors()))
+        del self.data['execution']
+        self.data['phases'][1].pop('epicSlice')
+        self.assertTrue(any('requires execution.mode slices' in e for e in self.errors()))
+
+    def test_scaffold_cli_flag_and_incompatible_schema(self):
+        cmd = [sys.executable, str(ROOT / 'scripts/scaffold-plan.py'), 'cli-plan', '--root', self.temp.name, '--execution', 'slices']
+        self.assertEqual(subprocess.run(cmd, capture_output=True, text=True).returncode, 0)
+        schema = json.loads((ROOT / 'assets/plan.schema.json').read_text())
+        del schema['properties']['execution']
+        (self.root / 'PLANS/plan.schema.json').write_text(json.dumps(schema))
+        result = subprocess.run(cmd[:2] + ['other-plan'] + cmd[3:], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('does not support execution.mode slices', result.stderr)
+        self.assertFalse((self.root / 'PLANS/other-plan').exists())
+
 if __name__ == '__main__': unittest.main()

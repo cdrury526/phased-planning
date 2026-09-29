@@ -24,7 +24,17 @@ def title_for(value):
     return value.replace("-", " ").capitalize()
 
 
-def populate(directory, name, title, phases, independent=False, outlines=(), schema_version=1):
+SLICE_STEPS = ("## Planned slices\n\nReplace with this phase's child slices, in order. When the phase starts, scaffold an\n"
+               "epic slice, set `epicSlice` in plan.json, and list these as its `plannedChildSlices`; the first\n"
+               "is a discovery slice that fills in the rest.\n\n"
+               "| # | Slice | Type | Notes |\n| --- | --- | --- | --- |\n| 00.0 | Replace | discovery | |")
+SLICE_README = ("\n## How phases execute\n\nPhases run through slices (`execution.mode` is `slices` in plan.json). When a phase starts,\n"
+                "scaffold an epic slice for it, record its path as the phase's `epicSlice`, run its discovery\n"
+                "slice, then execute and close small child slices one at a time. A phase is complete when its\n"
+                "epic slice is done; record slice links as the phase's evidence.\n")
+
+
+def populate(directory, name, title, phases, independent=False, outlines=(), schema_version=1, execution="phase-doc"):
     shutil.copytree(SKILL_ROOT / "assets/_template", directory)
     manifest = directory / "plan.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -38,9 +48,13 @@ def populate(directory, name, title, phases, independent=False, outlines=(), sch
         data.pop("activePhase", None)
         data["activePhases"] = []
         data["baseline"] = []
+    if execution == "slices":
+        data["execution"] = {"mode": "slices", "slicesDir": ".devops/slices"}
     data["phases"] = []
     phase_template = directory / "PHASE-00-foundation.md"
     phase_text = phase_template.read_text(encoding="utf-8")
+    if execution == "slices":
+        phase_text = phase_text.replace("## Implementation steps\n\n1. Replace with an actionable sequence scoped to this phase.", SLICE_STEPS, 1)
     phase_template.unlink()
     outline_text = (SKILL_ROOT / "assets/outline-phase.md").read_text(encoding="utf-8")
     links = []
@@ -65,7 +79,8 @@ def populate(directory, name, title, phases, independent=False, outlines=(), sch
     readme.write_text(
         readme.read_text(encoding="utf-8")
         .replace("# Initiative title", f"# {title}", 1)
-        .replace("1. [00 — Foundation](PHASE-00-foundation.md)", "\n".join(links)),
+        .replace("1. [00 — Foundation](PHASE-00-foundation.md)", "\n".join(links))
+        + (SLICE_README if execution == "slices" else ""),
         encoding="utf-8",
     )
     handoff = directory / "PLAN-STATUS.md"
@@ -95,7 +110,7 @@ def scaffold(args):
         staged_plans = staged_root / "PLANS"
         staged_plans.mkdir()
         staged = staged_plans / args.name
-        populate(staged, args.name, args.title or title_for(args.name), args.phase or ["foundation"], args.independent, args.outline, args.schema_version)
+        populate(staged, args.name, args.title or title_for(args.name), args.phase or ["foundation"], args.independent, args.outline, args.schema_version, args.execution)
         schema_bytes = (schema if schema.exists() else SKILL_ROOT / "assets/plan.schema.json").read_bytes()
         (staged_plans / "plan.schema.json").write_bytes(schema_bytes)
         result = subprocess.run([
@@ -103,6 +118,13 @@ def scaffold(args):
             "--root", str(staged_root), f"PLANS/{args.name}",
         ], capture_output=True, text=True)
         if result.returncode:
+            if args.execution == "slices" and schema.exists() and "execution" not in json.loads(schema.read_text(encoding="utf-8")).get("properties", {}):
+                raise ValueError(
+                    f"Existing project schema {schema} does not support execution.mode slices. Review and merge the "
+                    f"execution and epicSlice properties from {SKILL_ROOT / 'assets/plan.schema.json'} into it, validate "
+                    "existing plans, then retry. The schema was not replaced and project files were not written.\n"
+                    + result.stderr
+                )
             if args.schema_version == 2 and schema.exists():
                 raise ValueError(
                     f"Existing project schema {schema} rejected the version 2 plan. "
@@ -144,6 +166,7 @@ def main():
     parser.add_argument("--title", help="initiative display title (default: derived from name)")
     parser.add_argument("--phase", action="append", type=slug, help="phase slug; repeat in execution order (default: foundation)")
     parser.add_argument("--schema-version", type=int, choices=(1, 2), default=1, help="plan format version (default: 1; version 2 is opt-in)")
+    parser.add_argument("--execution", choices=("phase-doc", "slices"), default="phase-doc", help="how phases execute (default: phase-doc; slices runs each phase through an epic slice)")
     parser.add_argument("--independent", action="store_true", help="start with no phase dependencies; edit dependsOn for mixed tracks")
     parser.add_argument("--outline", action="append", type=slug, default=[], help="phase slug to scaffold with only objective, scope, and exit criteria")
     args = parser.parse_args()
