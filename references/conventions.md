@@ -60,6 +60,7 @@ discovery slice first.
 | `complete` | required; `done` (closed through the slice system) |
 
 Evidence for a complete phase links the epic slice and the child slices' close records.
+A phase can override the plan's mode with its own `execution` (`phase-doc` for phases completed before slices were adopted).
 Slice statuses are owned by the slice system; the plan never duplicates them. The
 checker reads only the epic slice's `sliceType` and `status`.
 

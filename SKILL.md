@@ -142,8 +142,9 @@ slice; its phase document is its brief.
 Between phases with no authorized work, leave the initiative `shelved` with the
 reason and resumption condition in the handoff; set it `active` when the next phase
 starts. Existing projects adopt slice mode by adding `execution` and `epicSlice` to
-their project schema deliberately, then converting phase documents' Implementation
-steps to Planned slices.
+their project schema deliberately. Phases finished before adoption keep the older
+contract with `"execution": "phase-doc"` on the phase (no epic slice, Implementation
+steps); convert only the phases that have not started.
 
 ## Dashboard
 

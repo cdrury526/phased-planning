@@ -111,6 +111,13 @@
             "type": "string",
             "pattern": "^[^/\\s][^\\s]*/slice\\.json$",
             "description": "Repository-relative path to this phase's epic slice.json (execution.mode slices). Required once the phase is active, blocked or complete."
+          },
+          "execution": {
+            "enum": [
+              "phase-doc",
+              "slices"
+            ],
+            "description": "Override the plan's execution mode for this phase, e.g. phase-doc for phases completed before slices were adopted."
           }
         },
         "allOf": [

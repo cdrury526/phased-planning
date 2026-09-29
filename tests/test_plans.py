@@ -272,7 +272,17 @@ class SliceExecution(unittest.TestCase):
         self.assertTrue(any('unique' in e for e in self.errors()))
         del self.data['execution']
         self.data['phases'][1].pop('epicSlice')
-        self.assertTrue(any('requires execution.mode slices' in e for e in self.errors()))
+        self.assertTrue(any('requires slice execution' in e for e in self.errors()))
+
+    def test_phase_override_allows_mixed_history(self):
+        # A phase finished before slices were adopted keeps the phase-doc contract.
+        doc = self.directory / 'PHASE-00-build.md'
+        doc.write_text(doc.read_text().replace('## Planned slices', '## Implementation steps'))
+        self.data['phases'][0].update(execution='phase-doc', status='complete', evidence=['Verified before slices'])
+        self.data.update(status='shelved', activePhase=None)
+        self.assertEqual(self.errors(), [])
+        del self.data['phases'][0]['execution']
+        self.assertTrue(self.errors())
 
     def test_scaffold_cli_flag_and_incompatible_schema(self):
         cmd = [sys.executable, str(ROOT / 'scripts/scaffold-plan.py'), 'cli-plan', '--root', self.temp.name, '--execution', 'slices']

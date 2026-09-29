@@ -103,8 +103,7 @@ def validate(directory, validator, root=None):
     check_document(directory, "README.md", ("Phase index", "Architectural references"), errors)
     check_document(directory, "PLAN-STATUS.md", HANDOFF_HEADINGS, errors)
     phases = data["phases"]
-    slice_mode = data.get("execution", {}).get("mode") == "slices"
-    phase_headings = SLICE_PHASE_HEADINGS if slice_mode else PHASE_HEADINGS
+    plan_mode = data.get("execution", {}).get("mode", "phase-doc")
     validate_phase_order(phases, errors)
     version = data["schemaVersion"]
     previous = {}
@@ -120,12 +119,14 @@ def validate(directory, validator, root=None):
         if document in documents:
             errors.append(f"phase {phase_id}: duplicate document")
         documents.add(document)
+        slice_mode = phase.get("execution", plan_mode) == "slices"
+        phase_headings = SLICE_PHASE_HEADINGS if slice_mode else PHASE_HEADINGS
         check_document(directory, document,
                        OUTLINE_HEADINGS if phase.get("type") == "outline" else phase_headings, errors)
         if slice_mode:
             check_epic_slice(root, phase, errors)
         elif phase.get("epicSlice"):
-            errors.append(f"phase {phase_id}: epicSlice requires execution.mode slices")
+            errors.append(f"phase {phase_id}: epicSlice requires slice execution (plan execution.mode or the phase's execution)")
         if version == 1 and phase.get("type") == "outline":
             errors.append(f"phase {phase_id}: outlines require schemaVersion 2")
         for dependency in phase["dependsOn"]:
